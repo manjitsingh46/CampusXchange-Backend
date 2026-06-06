@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: campusxchange-backend
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:prod}
+
+  config:
+    import: optional:file:.env[.properties]
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/campusxchange}
+    username: ${DB_USERNAME:campusxchange_user}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: true
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Google OAuth — leave blank to skip audience check
+google:
+  client-id: ${GOOGLE_CLIENT_ID:}
+  client-secret: ${GOOGLE_CLIENT_SECRET:}
+
+# JWT — must match @Value("${app.jwt.*}") in JwtProvider
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  seed-demo-data: ${SEED_DEMO_DATA:true}
+  jwt:
+    secret: ${JWT_SECRET:change-this-development-secret-key-32-chars-minimum}
+    expiration: ${JWT_EXPIRATION:86400000}
+    refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    root: WARN
+    com.campusxchange: INFO
+    org.springframework.security: WARN
+    org.hibernate.tool.schema.internal.ExceptionHandlerLoggedImpl: ERROR
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: ERROR
+  file:
+    name: ${LOG_FILE:logs/campusxchange.log}
+  pattern:
+    console: "%d{HH:mm:ss} %-5level %logger{20} - %msg%n"

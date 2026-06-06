@@ -1,0 +1,1510 @@
+openapi: "3.0.3"
+
+info:
+  title: CampusXchange API
+  version: "1.0.0"
+  description: |
+    Student peer-to-peer marketplace REST API.
+
+    **Base URL:** `http://localhost:8080`
+    **Swagger UI:** `http://localhost:8080/swagger-ui.html`
+
+    ## Authentication
+    Protected endpoints require two headers:
+    ```
+    Authorization: Bearer <access_token>
+    X-User-Id: <userId>
+    ```
+    Both values are returned by `/api/auth/login`, `/api/auth/register`, and `/api/auth/google`.
+
+    ## Real-time Chat (WebSocket)
+    Connect via SockJS + STOMP to `http://localhost:8080/ws`.
+    - Publish to `/app/chat/send` (include `X-User-Id` as STOMP header)
+    - Subscribe to `/topic/chat/{min_uid}_{max_uid}` where the UIDs are sorted ascending
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+security: []   # overridden per-operation where required
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    # ── Auth ─────────────────────────────────────────────────────────────
+    AuthRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: student@college.edu
+        password:
+          type: string
+          minLength: 6
+          example: secret123
+
+    RegisterRequest:
+      type: object
+      required: [username, email, firstName, lastName, password, college]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+          minLength: 2
+        lastName:
+          type: string
+          minLength: 2
+        password:
+          type: string
+          minLength: 8
+        confirmPassword:
+          type: string
+          description: Validated client-side only; backend ignores this field
+        college:
+          type: string
+          minLength: 2
+        phoneNumber:
+          type: string
+          maxLength: 20
+        studentId:
+          type: string
+          maxLength: 50
+
+    GoogleAuthRequest:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+          description: Google ID token returned by the Google Sign-In flow
+
+    AuthResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        profilePhotoUrl:
+          type: string
+          nullable: true
+        role:
+          $ref: "#/components/schemas/UserRole"
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: Token lifetime in milliseconds
+          example: 86400000
+        emailVerified:
+          type: boolean
+        studentVerified:
+          type: boolean
+
+    # ── Users ─────────────────────────────────────────────────────────────
+    UserDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phoneNumber:
+          type: string
+          nullable: true
+        college:
+          type: string
+        studentId:
+          type: string
+          nullable: true
+        profilePhotoUrl:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        role:
+          $ref: "#/components/schemas/UserRole"
+        rating:
+          type: number
+          format: double
+        totalReviews:
+          type: integer
+        emailVerified:
+          type: boolean
+        studentVerified:
+          type: boolean
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastLogin:
+          type: string
+          format: date-time
+          nullable: true
+
+    UserStats:
+      type: object
+      properties:
+        totalListings:
+          type: integer
+        activeListings:
+          type: integer
+        soldItems:
+          type: integer
+        savedItems:
+          type: integer
+        rating:
+          type: number
+          format: double
+        totalReviews:
+          type: integer
+
+    # ── Products ──────────────────────────────────────────────────────────
+    CreateProductRequest:
+      type: object
+      required: [title, description, price, category, condition, college, location]
+      properties:
+        title:
+          type: string
+          minLength: 5
+          maxLength: 200
+        description:
+          type: string
+          minLength: 20
+          maxLength: 5000
+        price:
+          type: number
+          format: decimal
+          minimum: 0.01
+        originalPrice:
+          type: number
+          format: decimal
+          nullable: true
+        category:
+          $ref: "#/components/schemas/ProductCategory"
+        condition:
+          $ref: "#/components/schemas/ProductCondition"
+        college:
+          type: string
+        location:
+          type: string
+          minLength: 3
+          maxLength: 100
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          minItems: 1
+          maxItems: 10
+          description: Cloudinary URLs — upload directly from frontend before calling this endpoint
+        videoUrl:
+          type: string
+          format: uri
+          nullable: true
+        modelUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to a 3-D model file for the Three.js viewer
+
+    ProductDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: decimal
+        originalPrice:
+          type: number
+          format: decimal
+          nullable: true
+        category:
+          $ref: "#/components/schemas/ProductCategory"
+        condition:
+          $ref: "#/components/schemas/ProductCondition"
+        status:
+          $ref: "#/components/schemas/ProductStatus"
+        sellerId:
+          type: integer
+          format: int64
+        sellerName:
+          type: string
+        sellerRating:
+          type: number
+          format: double
+          nullable: true
+        college:
+          type: string
+        location:
+          type: string
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+        videoUrl:
+          type: string
+          format: uri
+          nullable: true
+        modelUrl:
+          type: string
+          format: uri
+          nullable: true
+        viewCount:
+          type: integer
+        rating:
+          type: number
+          format: double
+        totalReviews:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── Reviews ───────────────────────────────────────────────────────────
+    CreateReviewRequest:
+      type: object
+      required: [productId, sellerId, rating, comment]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        sellerId:
+          type: integer
+          format: int64
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        title:
+          type: string
+          maxLength: 100
+          nullable: true
+        comment:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        isVerifiedPurchase:
+          type: boolean
+          default: false
+
+    ReviewDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productTitle:
+          type: string
+        reviewerId:
+          type: integer
+          format: int64
+        reviewerName:
+          type: string
+        sellerId:
+          type: integer
+          format: int64
+        sellerName:
+          type: string
+        rating:
+          type: number
+        title:
+          type: string
+          nullable: true
+        comment:
+          type: string
+        isVerifiedPurchase:
+          type: boolean
+        helpfulCount:
+          type: integer
+        unhelpfulCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── Messages ──────────────────────────────────────────────────────────
+    CreateMessageRequest:
+      type: object
+      required: [recipientId, content]
+      properties:
+        recipientId:
+          type: integer
+          format: int64
+        content:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    MessageDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        senderId:
+          type: integer
+          format: int64
+        senderName:
+          type: string
+        recipientId:
+          type: integer
+          format: int64
+        recipientName:
+          type: string
+        content:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ConversationSummary:
+      type: object
+      description: Returned by GET /api/messages/conversations
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: Conversation partner's user ID
+        username:
+          type: string
+        fullName:
+          type: string
+        profilePhotoUrl:
+          type: string
+          nullable: true
+        unreadCount:
+          type: integer
+
+    # ── Enums ─────────────────────────────────────────────────────────────
+    UserRole:
+      type: string
+      enum: [STUDENT, ADMIN]
+
+    ProductCategory:
+      type: string
+      enum:
+        - ELECTRONICS
+        - BOOKS
+        - FURNITURE
+        - CLOTHING
+        - SPORTS
+        - STATIONERY
+        - FOOD
+        - TRANSPORT
+        - GADGETS
+        - NOTES
+        - HOSTEL_ESSENTIALS
+        - GAMING
+        - OTHER
+
+    ProductCondition:
+      type: string
+      enum: [NEW, LIKE_NEW, GOOD, FAIR, POOR]
+
+    ProductStatus:
+      type: string
+      enum: [AVAILABLE, SOLD, RESERVED, DELETED]
+
+    # ── Common ────────────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+          example: EMAIL_EXISTS
+        message:
+          type: string
+        path:
+          type: string
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Validation failed
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            email: "Email must be valid"
+            password: "Password must be between 8 and 50 characters"
+
+    Page:
+      type: object
+      description: Spring Data pagination wrapper
+      properties:
+        content:
+          type: array
+          items: {}
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+          description: Current page (0-indexed)
+        first:
+          type: boolean
+        last:
+          type: boolean
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+# ── Paths ──────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Auth ──────────────────────────────────────────────────────────────
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new student account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "409":
+          description: Email or username already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/google:
+    post:
+      tags: [Auth]
+      summary: Login or register via Google OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleAuthRequest"
+      responses:
+        "200":
+          description: OK — existing user logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "201":
+          description: Created — new account auto-registered from Google profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid or expired Google token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset link
+      description: Always returns 200 regardless of whether the email exists (prevents user enumeration).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token using a refresh token
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+            example: "Bearer <refresh_token>"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid or expired refresh token
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (informational — client must discard stored tokens)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ── Users ─────────────────────────────────────────────────────────────
+  /api/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get a user's public profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDTO"
+        "404":
+          description: User not found
+
+    put:
+      tags: [Users]
+      summary: Update own profile
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserDTO"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDTO"
+        "401":
+          description: Unauthenticated
+
+  /api/users/{id}/products:
+    get:
+      tags: [Users]
+      summary: Get all products listed by a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ProductDTO"
+
+  /api/users/{id}/reviews:
+    get:
+      tags: [Users]
+      summary: Get all reviews written by a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: OK
+
+  /api/users/{id}/stats:
+    get:
+      tags: [Users]
+      summary: Get activity statistics for a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+  /api/users/search:
+    get:
+      tags: [Users]
+      summary: Search users by full name
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+
+  /api/users/college/{college}:
+    get:
+      tags: [Users]
+      summary: Get users from a specific college
+      parameters:
+        - in: path
+          name: college
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+
+  # ── Products ──────────────────────────────────────────────────────────
+  /api/products:
+    get:
+      tags: [Products]
+      summary: List all available products (paginated)
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ProductDTO"
+
+    post:
+      tags: [Products]
+      summary: Create a new product listing
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDTO"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthenticated
+
+  /api/products/{id}:
+    get:
+      tags: [Products]
+      summary: Get a product by ID (also increments view count)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDTO"
+        "404":
+          description: Product not found
+
+    put:
+      tags: [Products]
+      summary: Update a product listing (seller only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDTO"
+        "401":
+          description: Unauthenticated
+        "403":
+          description: Not the seller
+        "404":
+          description: Product not found
+
+    delete:
+      tags: [Products]
+      summary: Soft-delete a product (seller only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          description: Unauthenticated
+        "403":
+          description: Not the seller
+
+  /api/products/{id}/mark-sold:
+    patch:
+      tags: [Products]
+      summary: Mark a product as sold (seller only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/products/search:
+    get:
+      tags: [Products]
+      summary: Full-text search by title or description
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+
+  /api/products/search/advanced:
+    get:
+      tags: [Products]
+      summary: Filtered search with price range, category, and college
+      parameters:
+        - in: query
+          name: minPrice
+          schema:
+            type: number
+            format: decimal
+        - in: query
+          name: maxPrice
+          schema:
+            type: number
+            format: decimal
+        - in: query
+          name: category
+          schema:
+            $ref: "#/components/schemas/ProductCategory"
+        - in: query
+          name: college
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+
+  /api/products/category/{category}:
+    get:
+      tags: [Products]
+      summary: List products by category
+      parameters:
+        - in: path
+          name: category
+          required: true
+          schema:
+            $ref: "#/components/schemas/ProductCategory"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+
+  /api/products/college/{college}:
+    get:
+      tags: [Products]
+      summary: List products from a specific college
+      parameters:
+        - in: path
+          name: college
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+
+  /api/products/seller/{sellerId}:
+    get:
+      tags: [Products]
+      summary: List products by a specific seller
+      parameters:
+        - in: path
+          name: sellerId
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: OK
+
+  # ── Reviews ───────────────────────────────────────────────────────────
+  /api/reviews:
+    post:
+      tags: [Reviews]
+      summary: Create a review for a product / seller
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewDTO"
+        "401":
+          description: Unauthenticated
+
+  /api/reviews/product/{productId}:
+    get:
+      tags: [Reviews]
+      summary: Get reviews for a product
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ReviewDTO"
+
+  /api/reviews/seller/{sellerId}:
+    get:
+      tags: [Reviews]
+      summary: Get reviews for a seller
+      parameters:
+        - in: path
+          name: sellerId
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: OK
+
+  /api/reviews/{id}:
+    put:
+      tags: [Reviews]
+      summary: Update a review (reviewer only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewDTO"
+
+    delete:
+      tags: [Reviews]
+      summary: Delete a review (reviewer only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ── Messages ──────────────────────────────────────────────────────────
+  /api/messages/conversations:
+    get:
+      tags: [Messages]
+      summary: List all conversation partners with unread count
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationSummary"
+        "401":
+          description: Unauthenticated
+
+  /api/messages/conversation/{partnerId}:
+    get:
+      tags: [Messages]
+      summary: Get paginated message history with one partner
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: partnerId
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MessageDTO"
+        "401":
+          description: Unauthenticated
+
+  /api/messages/send:
+    post:
+      tags: [Messages]
+      summary: Send a message via REST (WebSocket preferred for real-time)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMessageRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDTO"
+        "401":
+          description: Unauthenticated
+
+  /api/messages/unread:
+    get:
+      tags: [Messages]
+      summary: Get all unread messages for the authenticated user
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageDTO"
+        "401":
+          description: Unauthenticated
+
+  /api/messages/{id}/read:
+    put:
+      tags: [Messages]
+      summary: Mark a specific message as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDTO"
+
+  /api/messages/{id}:
+    delete:
+      tags: [Messages]
+      summary: Delete a message
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+tags:
+  - name: Auth
+    description: Registration, login, Google OAuth, token refresh
+  - name: Users
+    description: User profiles and statistics
+  - name: Products
+    description: Product listings — browse, create, update, delete
+  - name: Reviews
+    description: Product and seller reviews
+  - name: Messages
+    description: Direct messaging (REST fallback; prefer WebSocket for real-time)
