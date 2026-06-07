@@ -38,5 +38,7 @@ management:
         enabled: true
 
 logging:
-  file:
-    name:
+  level:
+    com.zaxxer.hikari: DEBUG
+    org.springframework.orm.jpa: INFO
+    org.hibernate: INFO
